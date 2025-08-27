@@ -1,10 +1,3 @@
-name: Scrape PRCA Standings (Daily)
-
-on:
-  schedule:
-    - cron: "10 10 * * *"   # daily 10:10 UTC (~05:10 CT)
-  workflow_dispatch:
-
 jobs:
   scrape:
     runs-on: ubuntu-latest
@@ -30,13 +23,11 @@ jobs:
         run: node scrape/prca.js BB 2025 > data/BB.json
         timeout-minutes: 6
 
-      - name: Show first lines
-        run: head -n 40 data/BB.json || type data/BB.json
-
-      - name: Commit JSON
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@users.noreply.github.com"
-          git add data/*.json
-          git commit -m "Daily standings update" || echo "No changes"
-          git push
+      - name: Upload debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-pages
+          path: |
+            data/debug/**
+            data/BB.json
