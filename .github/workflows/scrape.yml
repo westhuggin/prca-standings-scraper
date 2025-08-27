@@ -1,3 +1,43 @@
+name: Scrape PRCA Standings (Daily)
+
+on:
+  schedule:
+    - cron: "10 10 * * *"   # daily 10:10 UTC (~05:10 CT)
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Cache npm + Playwright to avoid long installs on every run
+      - name: Cache node & playwright
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.npm
+            ~/.cache/ms-playwright
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm i
+        timeout-minutes: 6
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+        timeout-minutes: 10
+
+      - name: Make data folder
+        run: mkdir -p data
+
+      # One step per event, each allowed to fail without killing the job
       - name: Scrape BB
         run: node scrape/prca.js BB 2025 > data/BB.json || (echo "BB failed, continuing"; echo "[]" > data/BB.json)
         timeout-minutes: 6
@@ -29,33 +69,3 @@
         continue-on-error: true
 
       - name: Scrape TRL
-        run: node scrape/prca.js TRL 2025 > data/TRL.json || (echo "TRL failed, continuing"; echo "[]" > data/TRL.json)
-        timeout-minutes: 6
-        continue-on-error: true
-
-      - name: Scrape LBR
-        run: node scrape/prca.js LBR 2025 > data/LBR.json || (echo "LBR failed, continuing"; echo "[]" > data/LBR.json)
-        timeout-minutes: 6
-        continue-on-error: true
-
-      - name: Build ALL (merge)
-        run: node scrape/prca.js ALL 2025 > data/all.json || (echo "[]" > data/all.json)
-        timeout-minutes: 10
-        continue-on-error: true
-
-      - name: Upload debug artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug-pages
-          path: |
-            data/debug/**
-            data/*.json
-
-      - name: Commit JSON
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@users.noreply.github.com"
-          git add data/*.json
-          git commit -m "Daily standings update" || echo "No changes"
-          git push
