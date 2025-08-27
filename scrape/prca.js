@@ -5,47 +5,47 @@ const EVENTS = ['BB','SB','BR','TD','SW','TRH','TRL','LBR'];
 
 async function scrapeOne(eventType, year) {
   const url = `https://www.prorodeo.com/standings?eventType=${eventType}&standingType=world&year=${year}`;
+  console.log(`➡️  [${eventType}] Opening ${url}`);
 
-  // CI-safe launch (no-sandbox flags help on GitHub runners)
+  // CI-safe launch for GitHub Actions
   const browser = await chromium.launch({
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
-
   const page = await browser.newPage();
 
-  // Be generous with timeouts (cloud can be slow)
-  await page.goto(url, { waitUntil: 'networkidle', timeout: 120000 });
-
-  // Try multiple selectors in case the page structure shifts
-  let tableFound = false;
-  const selectors = ['table', 'main table', 'section table'];
-  for (const sel of selectors) {
-    try {
-      await page.waitForSelector(sel, { timeout: 60000 });
-      tableFound = true;
-      break;
-    } catch (e) { /* try next selector */ }
-  }
-  if (!tableFound) {
+  try {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
+    console.log(`✅ [${eventType}] Page loaded`);
+  } catch (e) {
+    console.error(`❌ [${eventType}] page.goto failed: ${e.message}`);
     await browser.close();
-    return []; // don’t crash the job—return empty and move on
+    return [];
+  }
+
+  // wait for a table, but don't hang forever
+  try {
+    await page.waitForSelector('table', { timeout: 20000 });
+    console.log(`✅ [${eventType}] Table detected`);
+  } catch (e) {
+    console.error(`❌ [${eventType}] Table not found within 20s`);
+    await browser.close();
+    return [];
   }
 
   const rows = await page.$$eval('table', (tables, ctx) => {
     const out = [];
+    // choose the table with the most rows
     const best = [...tables]
       .map(t => ({ t, n: t.querySelectorAll('tbody tr').length }))
-      .sort((a,b)=>b.n-a.n)[0];
+      .sort((a,b) => b.n - a.n)[0];
     if (!best || best.n === 0) return out;
 
-    const table = best.t;
-    const trs = table.querySelectorAll('tbody tr');
-
+    const trs = best.t.querySelectorAll('tbody tr');
     for (const tr of trs) {
       const tds = [...tr.querySelectorAll('td')].map(td => td.textContent.trim());
       if (!tds.length) continue;
 
-      const placing = Number((tds[0]||'').replace(/[^\d]/g,'')) || null;
+      const placing = Number((tds[0] || '').replace(/[^\d]/g,'')) || null;
       const contestant_name = tds[1] || '';
       const earnings = Number((tds[2] || tds[tds.length-1] || '').replace(/[$,]/g,'')) || 0;
 
@@ -63,7 +63,9 @@ async function scrapeOne(eventType, year) {
     return out;
   }, { eventType, year });
 
+  console.log(`ℹ️  [${eventType}] Extracted ${rows.length} rows`);
   await browser.close();
+  console.log(`✅ [${eventType}] Finished`);
   return rows;
 }
 
@@ -73,19 +75,20 @@ async function scrapeOne(eventType, year) {
 
   try {
     if (eventArg === 'ALL') {
-      const all = [];
+      let all = [];
       for (const ev of EVENTS) {
         const part = await scrapeOne(ev, year);
-        all.push(...part);
+        all = all.concat(part);
       }
+      console.log(`✅ [ALL] Finished all events. Total rows: ${all.length}`);
       process.stdout.write(JSON.stringify(all, null, 2));
     } else {
       const data = await scrapeOne(eventArg, year);
+      console.log(`✅ [${eventArg}] Done. Rows: ${data.length}`);
       process.stdout.write(JSON.stringify(data, null, 2));
     }
   } catch (err) {
-    // Don’t exit hard; print the error so logs show what's wrong
-    console.error('SCRAPE_ERROR', String(err && err.message || err));
+    console.error('SCRAPE_ERROR', err && err.message || err);
     process.stdout.write('[]');
   }
 })();
