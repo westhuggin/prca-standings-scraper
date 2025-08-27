@@ -1,0 +1,19 @@
+{
+  "name": "prca-standings-scraper",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "scrape:bb": "node scrape/prca.js BB 2025 > data/BB.json",
+    "scrape:sb": "node scrape/prca.js SB 2025 > data/SB.json",
+    "scrape:br": "node scrape/prca.js BR 2025 > data/BR.json",
+    "scrape:td": "node scrape/prca.js TD 2025 > data/TD.json",
+    "scrape:sw": "node scrape/prca.js SW 2025 > data/SW.json",
+    "scrape:trh": "node scrape/prca.js TRH 2025 > data/TRH.json",
+    "scrape:trl": "node scrape/prca.js TRL 2025 > data/TRL.json",
+    "scrape:lbr": "node scrape/prca.js LBR 2025 > data/LBR.json",
+    "scrape:all": "node scrape/prca.js ALL 2025 > data/all.json"
+  },
+  "dependencies": {
+    "playwright": "^1.47.2"
+  }
+}
