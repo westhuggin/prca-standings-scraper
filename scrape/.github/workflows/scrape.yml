@@ -1,0 +1,38 @@
+name: Scrape PRCA Standings (Daily)
+
+on:
+  schedule:
+    - cron: "10 10 * * *"   # daily 10:10 UTC (~05:10 CT)
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm i
+      - name: Install Playwright
+        run: npx playwright install --with-deps
+      - name: Make data folder
+        run: mkdir -p data
+      - name: Scrape all events
+        run: |
+          node scrape/prca.js BB 2025 > data/BB.json
+          node scrape/prca.js SB 2025 > data/SB.json
+          node scrape/prca.js BR 2025 > data/BR.json
+          node scrape/prca.js TD 2025 > data/TD.json
+          node scrape/prca.js SW 2025 > data/SW.json
+          node scrape/prca.js TRH 2025 > data/TRH.json
+          node scrape/prca.js TRL 2025 > data/TRL.json
+          node scrape/prca.js LBR 2025 > data/LBR.json
+          node scrape/prca.js ALL 2025 > data/all.json
+      - name: Commit JSON
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/*.json
+          git commit -m "Daily standings update" || echo "No changes"
+          git push
