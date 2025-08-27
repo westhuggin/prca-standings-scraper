@@ -10,25 +10,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: npm i
-      - name: Install Playwright
+
+      - name: Install deps
+        run: npm i
+
+      - name: Install Playwright browsers
         run: npx playwright install --with-deps
+
       - name: Make data folder
         run: mkdir -p data
-      - name: Scrape all events
-        run: |
-          node scrape/prca.js BB 2025 > data/BB.json
-          node scrape/prca.js SB 2025 > data/SB.json
-          node scrape/prca.js BR 2025 > data/BR.json
-          node scrape/prca.js TD 2025 > data/TD.json
-          node scrape/prca.js SW 2025 > data/SW.json
-          node scrape/prca.js TRH 2025 > data/TRH.json
-          node scrape/prca.js TRL 2025 > data/TRL.json
-          node scrape/prca.js LBR 2025 > data/LBR.json
-          node scrape/prca.js ALL 2025 > data/all.json
+
+      # --- Smoke test: just BB to see logs succeed ---
+      - name: Scrape BB
+        run: node scrape/prca.js BB 2025 > data/BB.json
+
+      - name: Show BB.json (first 40 lines)
+        run: head -n 40 data/BB.json || type data/BB.json
+
       - name: Commit JSON
         run: |
           git config user.name "github-actions"
