@@ -1,3 +1,10 @@
+name: Scrape PRCA Standings (Daily)
+
+on:
+  schedule:
+    - cron: "10 10 * * *"   # daily 10:10 UTC (~05:10 CT)
+  workflow_dispatch:
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
@@ -7,6 +14,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      # Cache npm + Playwright so installs are not slow every run
+      - name: Cache node & playwright
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.npm
+            ~/.cache/ms-playwright
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
 
       - name: Install dependencies
         run: npm i
@@ -19,9 +37,51 @@ jobs:
       - name: Make data folder
         run: mkdir -p data
 
+      # One event per step; if one fails, keep going
       - name: Scrape BB
-        run: node scrape/prca.js BB 2025 > data/BB.json
+        run: node scrape/prca.js BB 2025 > data/BB.json || (echo "[]" > data/BB.json)
         timeout-minutes: 6
+        continue-on-error: true
+
+      - name: Scrape SB
+        run: node scrape/prca.js SB 2025 > data/SB.json || (echo "[]" > data/SB.json)
+        timeout-minutes: 6
+        continue-on-error: true
+
+      - name: Scrape BR
+        run: node scrape/prca.js BR 2025 > data/BR.json || (echo "[]" > data/BR.json)
+        timeout-minutes: 6
+        continue-on-error: true
+
+      - name: Scrape TD
+        run: node scrape/prca.js TD 2025 > data/TD.json || (echo "[]" > data/TD.json)
+        timeout-minutes: 6
+        continue-on-error: true
+
+      - name: Scrape SW
+        run: node scrape/prca.js SW 2025 > data/SW.json || (echo "[]" > data/SW.json)
+        timeout-minutes: 6
+        continue-on-error: true
+
+      - name: Scrape TRH
+        run: node scrape/prca.js TRH 2025 > data/TRH.json || (echo "[]" > data/TRH.json)
+        timeout-minutes: 6
+        continue-on-error: true
+
+      - name: Scrape TRL
+        run: node scrape/prca.js TRL 2025 > data/TRL.json || (echo "[]" > data/TRL.json)
+        timeout-minutes: 6
+        continue-on-error: true
+
+      - name: Scrape LBR
+        run: node scrape/prca.js LBR 2025 > data/LBR.json || (echo "[]" > data/LBR.json)
+        timeout-minutes: 6
+        continue-on-error: true
+
+      - name: Build ALL (merge)
+        run: node scrape/prca.js ALL 2025 > data/all.json || (echo "[]" > data/all.json)
+        timeout-minutes: 10
+        continue-on-error: true
 
       - name: Upload debug artifacts
         if: always()
@@ -30,4 +90,12 @@ jobs:
           name: debug-pages
           path: |
             data/debug/**
-            data/BB.json
+            data/*.json
+
+      - name: Commit JSON
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/*.json || true
+          git commit -m "Daily standings update" || echo "No changes"
+          git push
