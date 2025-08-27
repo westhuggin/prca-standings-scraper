@@ -1,19 +1,38 @@
 // scrape/prca.js
-// Event codes: BB, SB, BR, TD, SW, TRH (Header), TRL (Heeler), LBR
 const { chromium } = require('playwright');
 
 const EVENTS = ['BB','SB','BR','TD','SW','TRH','TRL','LBR'];
 
 async function scrapeOne(eventType, year) {
   const url = `https://www.prorodeo.com/standings?eventType=${eventType}&standingType=world&year=${year}`;
-  const browser = await chromium.launch();
+
+  // CI-safe launch (no-sandbox flags help on GitHub runners)
+  const browser = await chromium.launch({
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+
   const page = await browser.newPage();
-  await page.goto(url, { waitUntil: 'networkidle' });
-  await page.waitForSelector('table'); // waits for JS-rendered table
+
+  // Be generous with timeouts (cloud can be slow)
+  await page.goto(url, { waitUntil: 'networkidle', timeout: 120000 });
+
+  // Try multiple selectors in case the page structure shifts
+  let tableFound = false;
+  const selectors = ['table', 'main table', 'section table'];
+  for (const sel of selectors) {
+    try {
+      await page.waitForSelector(sel, { timeout: 60000 });
+      tableFound = true;
+      break;
+    } catch (e) { /* try next selector */ }
+  }
+  if (!tableFound) {
+    await browser.close();
+    return []; // don’t crash the job—return empty and move on
+  }
 
   const rows = await page.$$eval('table', (tables, ctx) => {
     const out = [];
-    // choose the table with the most rows
     const best = [...tables]
       .map(t => ({ t, n: t.querySelectorAll('tbody tr').length }))
       .sort((a,b)=>b.n-a.n)[0];
@@ -52,15 +71,21 @@ async function scrapeOne(eventType, year) {
   const eventArg = (process.argv[2] || 'BB').toUpperCase(); // "BB" or "ALL"
   const year = process.argv[3] || '2025';
 
-  if (eventArg === 'ALL') {
-    const all = [];
-    for (const ev of EVENTS) {
-      const part = await scrapeOne(ev, year);
-      all.push(...part);
+  try {
+    if (eventArg === 'ALL') {
+      const all = [];
+      for (const ev of EVENTS) {
+        const part = await scrapeOne(ev, year);
+        all.push(...part);
+      }
+      process.stdout.write(JSON.stringify(all, null, 2));
+    } else {
+      const data = await scrapeOne(eventArg, year);
+      process.stdout.write(JSON.stringify(data, null, 2));
     }
-    process.stdout.write(JSON.stringify(all, null, 2));
-  } else {
-    const data = await scrapeOne(eventArg, year);
-    process.stdout.write(JSON.stringify(data, null, 2));
+  } catch (err) {
+    // Don’t exit hard; print the error so logs show what's wrong
+    console.error('SCRAPE_ERROR', String(err && err.message || err));
+    process.stdout.write('[]');
   }
 })();
