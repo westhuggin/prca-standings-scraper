@@ -62,4 +62,39 @@ jobs:
         timeout-minutes: 6
         continue-on-error: true
 
-      - n
+      - name: Scrape TRH
+        run: node scrape/prca.js TRH 2025 > data/TRH.json || (echo "[]" > data/TRH.json)
+        timeout-minutes: 6
+        continue-on-error: true
+
+      - name: Scrape TRL
+        run: node scrape/prca.js TRL 2025 > data/TRL.json || (echo "[]" > data/TRL.json)
+        timeout-minutes: 6
+        continue-on-error: true
+
+      - name: Scrape LBR
+        run: node scrape/prca.js LBR 2025 > data/LBR.json || (echo "[]" > data/LBR.json)
+        timeout-minutes: 6
+        continue-on-error: true
+
+      - name: Build ALL (merge)
+        run: node scrape/prca.js ALL 2025 > data/all.json || (echo "[]" > data/all.json)
+        timeout-minutes: 10
+        continue-on-error: true
+
+      - name: Upload debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-pages
+          path: |
+            data/debug/**
+            data/*.json
+
+      - name: Commit JSON
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/*.json || true
+          git commit -m "Daily standings update" || echo "No changes"
+          git push
